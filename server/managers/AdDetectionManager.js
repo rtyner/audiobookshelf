@@ -28,7 +28,7 @@ const STATUS = {
 
 class AdDetectionManager {
   constructor() {
-    /** @type {{episodeId: string, libraryItemId: string, force: boolean}[]} */
+    /** @type {{episodeId: string, libraryItemId: string, force: boolean, retranscribe: boolean}[]} */
     this.queue = []
     /** @type {string|null} */
     this.currentEpisodeId = null
@@ -72,9 +72,12 @@ class AdDetectionManager {
    * @param {string} libraryItemId
    * @param {Object} [options]
    * @param {boolean} [options.force] re-run even if it already completed
+   * @param {boolean} [options.retranscribe] discard the stored transcript and
+   *   transcribe again. Expensive, and only needed when the transcript itself
+   *   is bad - re-running detection alone reuses it.
    * @returns {Promise<{queued: boolean, reason?: string}>}
    */
-  async queueEpisode(episodeId, libraryItemId, { force = false } = {}) {
+  async queueEpisode(episodeId, libraryItemId, { force = false, retranscribe = false } = {}) {
     if (!Database.serverSettings?.adDetectionEnabled) {
       return { queued: false, reason: 'Ad detection is disabled in server settings' }
     }
@@ -92,7 +95,7 @@ class AdDetectionManager {
 
     this.cancelled.delete(episodeId)
     await this.setStatus(episode, STATUS.QUEUED)
-    this.queue.push({ episodeId, libraryItemId, force })
+    this.queue.push({ episodeId, libraryItemId, force, retranscribe })
     Logger.info(`[AdDetectionManager] Queued episode ${episodeId} (queue length ${this.queue.length})`)
 
     this.processQueue()
@@ -133,7 +136,7 @@ class AdDetectionManager {
   }
 
   /**
-   * @param {{episodeId: string, libraryItemId: string, force: boolean}} job
+   * @param {{episodeId: string, libraryItemId: string, force: boolean, retranscribe: boolean}} job
    */
   async runJob(job) {
     const episode = await Database.podcastEpisodeModel.findByPk(job.episodeId)
@@ -169,12 +172,15 @@ class AdDetectionManager {
     try {
       const transcriptionProvider = providers.createTranscriptionProvider(serverSettings)
       const detectionProvider = providers.createAdDetectionProvider(serverSettings)
-      await transcriptionProvider.validate()
       await detectionProvider.validate()
 
-      // 1. transcript - reuse an existing one unless forced
-      let transcript = job.force ? null : await this.readTranscript(episode.id)
+      // 1. transcript - reuse the stored one unless explicitly re-transcribing
+      let transcript = job.retranscribe ? null : await this.readTranscript(episode.id)
       if (!transcript) {
+        // Only require a working transcriber when there is nothing to reuse,
+        // so re-detecting an already transcribed episode works on a host that
+        // has no local speech model installed.
+        await transcriptionProvider.validate()
         await this.setStatus(episode, STATUS.TRANSCRIBING)
         const prepared = await audioPrep.prepareForTranscription(audioFilePath, episode.id)
         cleanup = prepared.cleanup
@@ -315,9 +321,10 @@ class AdDetectionManager {
    * @param {string} libraryId
    * @param {Object} [options]
    * @param {boolean} [options.force]
+   * @param {boolean} [options.retranscribe]
    * @returns {Promise<number>} number of episodes queued
    */
-  async backfillLibrary(libraryId, { force = false } = {}) {
+  async backfillLibrary(libraryId, { force = false, retranscribe = false } = {}) {
     const libraryItems = await Database.libraryItemModel.findAll({
       where: { libraryId, mediaType: 'podcast' },
       attributes: ['id', 'mediaId']
@@ -332,7 +339,7 @@ class AdDetectionManager {
       })
       for (const episode of episodes) {
         if (!force && episode.extraData?.adDetectionStatus === STATUS.COMPLETE) continue
-        const result = await this.queueEpisode(episode.id, libraryItem.id, { force })
+        const result = await this.queueEpisode(episode.id, libraryItem.id, { force, retranscribe })
         if (result.queued) queued++
       }
     }

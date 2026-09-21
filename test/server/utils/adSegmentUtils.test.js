@@ -117,6 +117,26 @@ describe('adSegmentUtils', () => {
       expect(result[0]).to.include({ start: 61, end: 118 })
     })
 
+    it('snaps a start that sits just after a silence ends', () => {
+      // A transcript line routinely begins a second or two after the real
+      // seam, so the near edge of the silence must count as a match.
+      const result = adSegmentUtils.snapToSilence([{ start: 125, end: 259, confidence: 1 }], [
+        { start: 120, end: 124 },
+        { start: 264, end: 268 }
+      ])
+      expect(result[0].start).to.equal(120)
+      expect(result[0].end).to.equal(268)
+    })
+
+    it('swallows the whole silence rather than landing inside it', () => {
+      const result = adSegmentUtils.snapToSilence([{ start: 122, end: 265, confidence: 1 }], [
+        { start: 120, end: 124 },
+        { start: 264, end: 268 }
+      ])
+      expect(result[0].start).to.equal(120)
+      expect(result[0].end).to.equal(268)
+    })
+
     it('is a no-op with no silences', () => {
       const segments = [{ start: 61, end: 118, confidence: 1 }]
       expect(adSegmentUtils.snapToSilence(segments, [])).to.deep.equal(segments)

@@ -166,6 +166,43 @@ describe('AdDetectionManager', () => {
       expect(stored.segments).to.have.lengthOf(1)
     })
 
+    it('reuses the stored transcript on a forced re-run', async () => {
+      stubProviders([{ start: 100, end: 160, confidence: 0.9 }])
+      await AdDetectionManager.queueEpisode(episode.id, 'li-1')
+      await waitForIdle()
+
+      // A transcriber that would fail proves the re-run never called it
+      providers.createTranscriptionProvider.returns({
+        name: 'stub',
+        validate: async () => {
+          throw new Error('whisper.cpp not found')
+        },
+        transcribe: async () => {
+          throw new Error('should not transcribe again')
+        }
+      })
+
+      await AdDetectionManager.queueEpisode(episode.id, 'li-1', { force: true })
+      await waitForIdle()
+
+      await episode.reload()
+      expect(episode.extraData.adDetectionStatus).to.equal('complete')
+    })
+
+    it('re-transcribes only when asked', async () => {
+      stubProviders([])
+      await AdDetectionManager.queueEpisode(episode.id, 'li-1')
+      await waitForIdle()
+
+      const transcribe = sinon.stub().resolves(transcript)
+      providers.createTranscriptionProvider.returns({ name: 'stub', validate: async () => {}, transcribe })
+
+      await AdDetectionManager.queueEpisode(episode.id, 'li-1', { force: true, retranscribe: true })
+      await waitForIdle()
+
+      expect(transcribe.calledOnce).to.be.true
+    })
+
     it('marks the episode failed when the audio file is missing', async () => {
       stubProviders([])
       await fs.remove(audioFilePath)

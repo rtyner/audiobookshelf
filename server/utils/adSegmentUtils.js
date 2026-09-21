@@ -20,8 +20,12 @@ const MERGE_GAP_SECONDS = 3
 const MIN_SEGMENT_SECONDS = 5
 /** No single ad break may exceed this share of the episode */
 const MAX_SEGMENT_DURATION_RATIO = 0.25
-/** Search window when snapping a boundary to nearby silence */
-const SILENCE_SNAP_WINDOW_SECONDS = 4
+/**
+ * How far a boundary may move to reach a silence. Transcript timestamps
+ * routinely sit a few seconds inside the real seam, because the last word of
+ * an ad read ends before the gap that follows it.
+ */
+const SILENCE_SNAP_WINDOW_SECONDS = 6
 
 /**
  * Coerce provider output into well formed segments, dropping anything unusable.
@@ -140,21 +144,31 @@ function labelByPosition(segments, duration) {
 function snapToSilence(segments, silences, window = SILENCE_SNAP_WINDOW_SECONDS) {
   if (!silences?.length) return segments
 
-  const snap = (time, preferEdge) => {
-    let best = time
-    let bestDistance = window
+  // Distance from a time to the nearest point of a silence, 0 when inside it.
+  const distanceToSilence = (time, silence) => {
+    if (time < silence.start) return silence.start - time
+    if (time > silence.end) return time - silence.end
+    return 0
+  }
+
+  /**
+   * @param {number} time
+   * @param {'start'|'end'} edge
+   */
+  const snap = (time, edge) => {
+    let nearest = null
+    let nearestDistance = window
     for (const silence of silences) {
-      // Snapping a start backwards to the start of silence, and an end
-      // forwards to the end of silence, always errs toward skipping slightly
-      // more rather than clipping content.
-      const candidate = preferEdge === 'start' ? silence.start : silence.end
-      const distance = Math.abs(candidate - time)
-      if (distance < bestDistance) {
-        best = candidate
-        bestDistance = distance
+      const distance = distanceToSilence(time, silence)
+      if (distance < nearestDistance) {
+        nearest = silence
+        nearestDistance = distance
       }
     }
-    return best
+    if (!nearest) return time
+    // Expand outward onto the far edge of the silence so the whole gap is
+    // swallowed. Nothing audible is lost - the gap is silent by definition.
+    return edge === 'start' ? nearest.start : nearest.end
   }
 
   return segments.map((segment) => ({

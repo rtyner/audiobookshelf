@@ -75,7 +75,10 @@ class AdSegmentController {
       return res.sendStatus(403)
     }
     const force = req.query.force === '1' || req.body?.force === true
-    const result = await AdDetectionManager.queueEpisode(req.episode.id, req.libraryItem.id, { force })
+    // Re-transcribing is opt-in: detection alone reuses the stored transcript,
+    // which is the cheap and usual case.
+    const retranscribe = req.query.retranscribe === '1' || req.body?.retranscribe === true
+    const result = await AdDetectionManager.queueEpisode(req.episode.id, req.libraryItem.id, { force, retranscribe })
     if (!result.queued) {
       return res.status(409).send(result.reason || 'Not queued')
     }
@@ -164,8 +167,9 @@ class AdSegmentController {
     }
 
     const force = req.query.force === '1'
+    const retranscribe = req.query.retranscribe === '1'
     // Fire and forget - the queue reports progress over the task socket
-    const queued = await AdDetectionManager.backfillLibrary(library.id, { force })
+    const queued = await AdDetectionManager.backfillLibrary(library.id, { force, retranscribe })
     res.json({ queued })
   }
 
