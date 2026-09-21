@@ -8,28 +8,32 @@
 # Usage:
 #   DEEPSEEK_API_KEY=sk-... ./deploy-dev01.sh
 #
-# Requires: SSH access to dev01 as a user in the docker group.
+# Requires: SSH access to dev01 as a user with sudo (the account is not in the
+# docker group, so docker is invoked through sudo rather than changing group
+# membership on the host).
 
 set -euo pipefail
 
-HOST="${HOST:-rt@10.1.1.50}"
+HOST="${HOST:-rusty@10.1.1.50}"
 REMOTE_DIR="${REMOTE_DIR:-/srv/audiobookshelf-adskip}"
 SSH_OPTS="${SSH_OPTS:--o IdentityAgent=none -o IdentitiesOnly=yes -i ${HOME}/.ssh/id_ed25519}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# The API key is optional here - it can also be set in the web UI under
+# Settings -> Ad Detection after first boot.
 if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
-  echo "DEEPSEEK_API_KEY is not set" >&2
-  exit 1
+  echo "note: DEEPSEEK_API_KEY not set; set the key in the web UI after boot"
 fi
 
 echo "==> Checking dev01"
 # shellcheck disable=SC2086
-ssh $SSH_OPTS "$HOST" 'docker --version && docker compose version' >/dev/null
+ssh $SSH_OPTS "$HOST" 'sudo docker --version && sudo docker compose version' >/dev/null
 
 echo "==> Syncing repo to ${HOST}:${REMOTE_DIR}"
 # shellcheck disable=SC2086
-ssh $SSH_OPTS "$HOST" "mkdir -p '$REMOTE_DIR'"
+# /srv is root-owned; create the directory once and hand it to the deploy user
+ssh $SSH_OPTS "$HOST" "sudo mkdir -p '$REMOTE_DIR' && sudo chown \$(id -u):\$(id -g) '$REMOTE_DIR'"
 rsync -az --delete \
   --exclude node_modules \
   --exclude client/node_modules \
@@ -43,9 +47,9 @@ rsync -az --delete \
 echo "==> Writing .env"
 # shellcheck disable=SC2086
 ssh $SSH_OPTS "$HOST" "cat > '$REMOTE_DIR/docker/ad-detection/.env'" <<ENVEOF
-DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
 ABS_PORT=${ABS_PORT:-13378}
-WHISPER_THREADS=${WHISPER_THREADS:-3}
+WHISPER_THREADS=${WHISPER_THREADS:-4}
 TZ=${TZ:-America/New_York}
 ENVEOF
 # shellcheck disable=SC2086
@@ -53,11 +57,11 @@ ssh $SSH_OPTS "$HOST" "chmod 600 '$REMOTE_DIR/docker/ad-detection/.env'"
 
 echo "==> Building and starting (first build takes several minutes)"
 # shellcheck disable=SC2086
-ssh $SSH_OPTS "$HOST" "cd '$REMOTE_DIR/docker/ad-detection' && docker compose up -d --build"
+ssh $SSH_OPTS "$HOST" "cd '$REMOTE_DIR/docker/ad-detection' && sudo docker compose up -d --build"
 
 echo "==> Status"
 # shellcheck disable=SC2086
-ssh $SSH_OPTS "$HOST" "cd '$REMOTE_DIR/docker/ad-detection' && docker compose ps"
+ssh $SSH_OPTS "$HOST" "cd '$REMOTE_DIR/docker/ad-detection' && sudo docker compose ps"
 
 echo
 echo "Audiobookshelf:  http://10.1.1.50:${ABS_PORT:-13378}"

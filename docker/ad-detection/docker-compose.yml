@@ -26,7 +26,8 @@ services:
     environment:
       TZ: ${TZ:-America/New_York}
       # Read at startup so the key is never stored in the settings row
-      AD_DETECTION_LLM_API_KEY: ${DEEPSEEK_API_KEY:?set DEEPSEEK_API_KEY in .env}
+      # Optional here - it can also be entered in Settings -> Ad Detection
+      AD_DETECTION_LLM_API_KEY: ${DEEPSEEK_API_KEY:-}
     volumes:
       - ./data/config:/config
       - ./data/metadata:/metadata
