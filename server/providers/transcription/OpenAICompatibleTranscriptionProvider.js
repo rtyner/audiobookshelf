@@ -1,4 +1,5 @@
 const axios = require('axios')
+const FormData = require('form-data')
 const nodeFs = require('fs')
 const Path = require('path')
 const Logger = require('../../Logger')
@@ -47,12 +48,11 @@ class OpenAICompatibleTranscriptionProvider extends TranscriptionProvider {
   async transcribe(wavPath, options = {}) {
     await this.validate()
 
-    // Node's global FormData + openAsBlob avoids pulling in a form-data
-    // dependency while still streaming the file rather than buffering it.
-    // openAsBlob lives on the fs module itself, not on fs.promises
-    const blob = await nodeFs.openAsBlob(wavPath, { type: 'audio/wav' })
-    const form = new globalThis.FormData()
-    form.append('file', blob, Path.basename(wavPath))
+    // axios 0.27 cannot serialize a native FormData body, so use the
+    // form-data package. It streams the file rather than buffering a whole
+    // episode's audio into memory.
+    const form = new FormData()
+    form.append('file', nodeFs.createReadStream(wavPath), { filename: Path.basename(wavPath), contentType: 'audio/wav' })
     form.append('model', this.model)
     form.append('response_format', 'verbose_json')
     form.append('timestamp_granularities[]', 'segment')
@@ -64,6 +64,7 @@ class OpenAICompatibleTranscriptionProvider extends TranscriptionProvider {
 
     const response = await axios.post(url, form, {
       headers: {
+        ...form.getHeaders(),
         Authorization: `Bearer ${this.config.apiKey}`
       },
       timeout: this.timeout,

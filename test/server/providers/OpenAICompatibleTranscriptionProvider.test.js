@@ -58,12 +58,30 @@ describe('OpenAICompatibleTranscriptionProvider', () => {
       const [url, form, config] = post.firstCall.args
       expect(url).to.equal('http://whisper:8000/v1/audio/transcriptions')
       expect(config.headers.Authorization).to.equal('Bearer k')
+      // axios 0.27 cannot serialize a native FormData, so the body must be a
+      // form-data instance carrying its own multipart headers
+      expect(config.headers['content-type']).to.match(/^multipart\/form-data; boundary=/)
 
-      // Regression: the file must actually be read into the form. This fails
-      // if the blob helper is called on the wrong fs namespace.
-      expect(form.get('file')).to.exist
-      expect(form.get('model')).to.equal('Systran/faster-whisper-small')
-      expect(form.get('response_format')).to.equal('verbose_json')
+      // Regression: the file must actually be opened and attached. Serialising
+      // the form exercises the read, so a bad file handle fails here.
+      const body = await new Promise((resolve, reject) => {
+        form.pipe(
+          require('stream').Writable({
+            write(chunk, _enc, cb) {
+              this._data = (this._data || '') + chunk.toString('binary')
+              cb()
+            },
+            final(cb) {
+              resolve(this._data)
+              cb()
+            }
+          })
+        )
+        form.on('error', reject)
+      })
+      expect(body).to.include(`filename="${Path.basename(wavPath)}"`)
+      expect(body).to.include('Systran/faster-whisper-small')
+      expect(body).to.include('verbose_json')
 
       expect(transcript.segments).to.have.lengthOf(2)
       expect(transcript.segments[1]).to.include({ start: 32.4, end: 38 })
