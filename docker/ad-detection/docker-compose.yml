@@ -26,6 +26,14 @@ services:
     environment:
       TZ: ${TZ:-America/New_York}
       # Read at startup so the key is never stored in the settings row
+      # Everything except the API key is pre-configured for this stack, so the
+      # feature works as soon as a key is supplied.
+      AD_DETECTION_ENABLED: '1'
+      AD_DETECTION_TRANSCRIPTION_PROVIDER: openai-compatible
+      AD_DETECTION_TRANSCRIPTION_BASE_URL: http://whisper:8000/v1
+      AD_DETECTION_TRANSCRIPTION_MODEL: Systran/faster-whisper-small
+      AD_DETECTION_LLM_BASE_URL: https://api.deepseek.com/v1
+      AD_DETECTION_LLM_MODEL: deepseek-chat
       # Optional here - it can also be entered in Settings -> Ad Detection
       AD_DETECTION_LLM_API_KEY: ${DEEPSEEK_API_KEY:-}
     volumes:
@@ -43,7 +51,7 @@ services:
     environment:
       # small.en is the accuracy/CPU sweet spot for ad detection - the LLM
       # only needs the transcript to be good enough to spot a sponsor read.
-      WHISPER__MODEL: Systran/faster-whisper-small.en
+      WHISPER__MODEL: Systran/faster-whisper-small
       WHISPER__COMPUTE_TYPE: int8
       WHISPER__INFERENCE_DEVICE: cpu
       # CTranslate2 otherwise picks its own thread count and can land on one
@@ -55,7 +63,8 @@ services:
         limits:
           cpus: '${WHISPER_THREADS:-3}'
     healthcheck:
-      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      # The image ships python3 (not `python`) and no curl/wget
+      test: ['CMD', 'python3', '-c', "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 10

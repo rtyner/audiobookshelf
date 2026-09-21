@@ -264,11 +264,32 @@ class ServerSettings {
       this.backupPath = process.env.BACKUP_PATH
     }
 
+    // Environment overrides let a deployment ship working ad detection config
+    // without anyone editing settings in the UI first. They win over the
+    // stored settings, so the container is the source of truth when set.
     if (process.env.AD_DETECTION_LLM_API_KEY) {
       this.adDetectionLlmApiKey = process.env.AD_DETECTION_LLM_API_KEY
     }
     if (process.env.AD_DETECTION_TRANSCRIPTION_API_KEY) {
       this.adDetectionTranscriptionApiKey = process.env.AD_DETECTION_TRANSCRIPTION_API_KEY
+    }
+    if (process.env.AD_DETECTION_ENABLED === '1') {
+      this.adDetectionEnabled = true
+    }
+    if (process.env.AD_DETECTION_TRANSCRIPTION_PROVIDER) {
+      this.adDetectionTranscriptionProvider = process.env.AD_DETECTION_TRANSCRIPTION_PROVIDER
+    }
+    if (process.env.AD_DETECTION_TRANSCRIPTION_BASE_URL) {
+      this.adDetectionTranscriptionBaseUrl = process.env.AD_DETECTION_TRANSCRIPTION_BASE_URL
+    }
+    if (process.env.AD_DETECTION_TRANSCRIPTION_MODEL) {
+      this.adDetectionTranscriptionModel = process.env.AD_DETECTION_TRANSCRIPTION_MODEL
+    }
+    if (process.env.AD_DETECTION_LLM_BASE_URL) {
+      this.adDetectionLlmBaseUrl = process.env.AD_DETECTION_LLM_BASE_URL
+    }
+    if (process.env.AD_DETECTION_LLM_MODEL) {
+      this.adDetectionLlmModel = process.env.AD_DETECTION_LLM_MODEL
     }
 
     if (process.env.ALLOW_IFRAME === '1' && !this.allowIframe) {
