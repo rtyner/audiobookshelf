@@ -27,7 +27,11 @@ class PodcastFinder {
   async findCovers(term) {
     if (!term) return null
     Logger.debug(`[iTunes] Searching for podcast covers with term "${term}"`)
-    const results = await this.iTunesApi.searchPodcasts(term)
+    // Cover lookup is best-effort - a provider outage must not fail the caller
+    const results = await this.iTunesApi.searchPodcasts(term).catch((error) => {
+      Logger.warn(`[iTunes] Cover search failed for "${term}": ${error.message}`)
+      return []
+    })
     if (!results) return []
     return results.map((r) => r.cover).filter((r) => r)
   }

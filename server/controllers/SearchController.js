@@ -151,6 +151,11 @@ class SearchController {
       if (error instanceof ValidationError) {
         return res.status(error.status).json({ error: error.message })
       }
+      if (error.isProviderError) {
+        // 502: the directory is unreachable or throttling us. Reporting this
+        // as an empty result set would read as "no such podcast".
+        return res.status(502).json({ error: 'Podcast directory search is unavailable, try again shortly' })
+      }
       return res.status(500).json({ error: 'Internal server error' })
     }
   }

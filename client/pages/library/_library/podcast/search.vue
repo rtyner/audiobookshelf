@@ -12,7 +12,8 @@
         <ui-file-input ref="fileInput" :accept="'.opml, .txt'" class="ml-2" @change="opmlFileUpload">{{ $strings.ButtonUploadOPMLFile }}</ui-file-input>
       </div>
       <div class="w-full max-w-3xl mx-auto py-4">
-        <p v-if="termSearched && !results.length && !processing" class="text-center text-xl">{{ $strings.MessageNoPodcastsFound }}</p>
+        <p v-if="searchFailed && !processing" class="text-center text-xl text-error">{{ $strings.MessagePodcastSearchFailed }}</p>
+        <p v-else-if="termSearched && !results.length && !processing" class="text-center text-xl">{{ $strings.MessageNoPodcastsFound }}</p>
         <template v-for="podcast in results">
           <div :key="podcast.id" class="flex p-1 hover:bg-primary/25 cursor-pointer" @click="selectPodcast(podcast)">
             <div class="w-20 min-w-20 h-20 md:w-24 md:min-w-24 md:h-24 bg-primary">
@@ -69,6 +70,7 @@ export default {
   data() {
     return {
       searchInput: '',
+      searchFailed: false,
       results: [],
       termSearched: '',
       processing: false,
@@ -164,8 +166,13 @@ export default {
         term,
         country: this.librarySettings?.podcastSearchRegion || 'us'
       })
+      this.searchFailed = false
       let results = await this.$axios.$get(`/api/search/podcast?${searchParams.toString()}`).catch((error) => {
         console.error('Search request failed', error)
+        // A failed lookup is not the same as no matches - say so, otherwise
+        // a throttled directory looks exactly like a podcast that does not exist.
+        this.searchFailed = true
+        this.$toast.error(error.response?.data?.error || this.$strings.MessagePodcastSearchFailed)
         return []
       })
       console.log('Got results', results)

@@ -63,8 +63,15 @@ class iTunes {
         return response.data.results || []
       })
       .catch((error) => {
-        Logger.error(`[iTunes] search request error`, error.message)
-        return []
+        // Surface the failure instead of returning an empty list. Apple
+        // throttles aggressively, and a swallowed error is indistinguishable
+        // from "no such podcast" - the caller decides how to report it.
+        const reason = error.code || error.message || 'request failed'
+        Logger.error(`[iTunes] search request error: ${reason}`)
+        const searchError = new Error(`iTunes search failed: ${reason}`)
+        searchError.isProviderError = true
+        searchError.code = error.code
+        throw searchError
       })
   }
 

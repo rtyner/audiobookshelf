@@ -901,6 +901,7 @@
   "MessagePlaylistCreateFromCollection": "Create playlist from collection",
   "MessagePleaseWait": "Please wait...",
   "MessagePodcastHasNoRSSFeedForMatching": "Podcast has no RSS feed url to use for matching",
+  "MessagePodcastSearchFailed": "Podcast directory search is unavailable. Apple throttles frequent searches - wait a minute and try again, or paste the RSS feed URL directly.",
   "MessagePodcastSearchField": "Enter search term or RSS feed URL",
   "MessageQuickEmbedInProgress": "Quick embed in progress",
   "MessageQuickEmbedQueue": "Queued for quick embed ({0} in queue)",

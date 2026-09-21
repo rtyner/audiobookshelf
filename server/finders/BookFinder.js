@@ -175,7 +175,11 @@ class BookFinder {
    * @returns {Promise<Object[]>}
    */
   async getiTunesAudiobooksResults(title) {
-    return this.iTunesApi.searchAudiobooks(title, this.#providerResponseTimeout)
+    // One provider failing must not fail a multi-provider book search
+    return this.iTunesApi.searchAudiobooks(title, this.#providerResponseTimeout).catch((error) => {
+      Logger.warn(`[BookFinder] iTunes search failed for "${title}": ${error.message}`)
+      return []
+    })
   }
 
   /**
