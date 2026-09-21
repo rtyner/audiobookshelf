@@ -14,6 +14,7 @@ const htmlSanitizer = require('../utils/htmlSanitizer')
 
 const Scanner = require('../scanner/Scanner')
 const CoverManager = require('../managers/CoverManager')
+const AdDetectionManager = require('../managers/AdDetectionManager')
 
 /**
  * @typedef RequestUserObject
@@ -534,6 +535,9 @@ class PodcastController {
     if (mediaProgressRemoved) {
       Logger.info(`[PodcastController] Removed ${mediaProgressRemoved} media progress for episode ${episode.id}`)
     }
+
+    // Remove ad segments and the transcript so they do not outlive the episode
+    await AdDetectionManager.cleanupEpisode(episode.id)
 
     // Remove episode
     await episode.destroy()

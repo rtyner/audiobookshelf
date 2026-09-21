@@ -35,6 +35,7 @@ const MiscController = require('../controllers/MiscController')
 const ShareController = require('../controllers/ShareController')
 const StatsController = require('../controllers/StatsController')
 const ApiKeyController = require('../controllers/ApiKeyController')
+const AdSegmentController = require('../controllers/AdSegmentController')
 
 class ApiRouter {
   constructor(Server) {
@@ -95,6 +96,7 @@ class ApiRouter {
     this.router.post('/libraries/:id/remove-metadata', LibraryController.middleware.bind(this), LibraryController.removeAllMetadataFiles.bind(this))
     this.router.get('/libraries/:id/podcast-titles', LibraryController.middleware.bind(this), LibraryController.getPodcastTitles.bind(this))
     this.router.get('/libraries/:id/download', LibraryController.middleware.bind(this), LibraryController.downloadMultiple.bind(this))
+    this.router.post('/libraries/:id/ad-detection/backfill', LibraryController.middleware.bind(this), AdSegmentController.backfillLibrary.bind(AdSegmentController))
 
     //
     // Item Routes
@@ -258,6 +260,16 @@ class ApiRouter {
     this.router.get('/podcasts/:id/episode/:episodeId', PodcastController.middleware.bind(this), PodcastController.getEpisode.bind(this))
     this.router.patch('/podcasts/:id/episode/:episodeId', PodcastController.middleware.bind(this), PodcastController.updateEpisode.bind(this))
     this.router.delete('/podcasts/:id/episode/:episodeId', PodcastController.middleware.bind(this), PodcastController.removeEpisode.bind(this))
+
+    //
+    // Ad Detection Routes
+    //
+    this.router.get('/podcasts/:id/episode/:episodeId/ad-segments', AdSegmentController.middleware.bind(this), AdSegmentController.getSegments.bind(AdSegmentController))
+    this.router.post('/podcasts/:id/episode/:episodeId/ad-segments', AdSegmentController.middleware.bind(this), AdSegmentController.createOrDetect.bind(AdSegmentController))
+    this.router.patch('/podcasts/:id/episode/:episodeId/ad-segments/:segmentId', AdSegmentController.middleware.bind(this), AdSegmentController.updateSegment.bind(AdSegmentController))
+    this.router.delete('/podcasts/:id/episode/:episodeId/ad-segments/:segmentId', AdSegmentController.middleware.bind(this), AdSegmentController.deleteSegment.bind(AdSegmentController))
+    this.router.get('/podcasts/:id/episode/:episodeId/transcript', AdSegmentController.middleware.bind(this), AdSegmentController.getTranscript.bind(AdSegmentController))
+    this.router.get('/ad-detection/status', AdSegmentController.getStatus.bind(AdSegmentController))
 
     //
     // Notification Routes (Admin and up)

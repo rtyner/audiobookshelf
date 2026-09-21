@@ -108,6 +108,22 @@ class ServerSettings {
     this.authOpenIDAdvancedPermsClaim = ''
     this.authOpenIDSubfolderForRedirectURLs = undefined
 
+    // AI ad detection (podcasts). Opt-in: transcription is expensive and
+    // detection may send transcripts to a third party.
+    this.adDetectionEnabled = false
+    this.adDetectionAutoRun = true
+    this.adDetectionAutoSkip = true
+    this.adDetectionMinConfidence = 0.7
+    this.adDetectionTranscriptionProvider = 'whisper-local'
+    this.adDetectionWhisperModel = 'base.en'
+    this.adDetectionTranscriptionBaseUrl = null
+    this.adDetectionTranscriptionModel = null
+    this.adDetectionTranscriptionApiKey = null
+    this.adDetectionLlmProvider = 'llm'
+    this.adDetectionLlmBaseUrl = 'https://api.deepseek.com/v1'
+    this.adDetectionLlmModel = 'deepseek-chat'
+    this.adDetectionLlmApiKey = null
+
     if (settings) {
       this.construct(settings)
     }
@@ -128,6 +144,20 @@ class ServerSettings {
     this.rateLimitLoginRequests = !isNaN(settings.rateLimitLoginRequests) ? Number(settings.rateLimitLoginRequests) : 10
     this.rateLimitLoginWindow = !isNaN(settings.rateLimitLoginWindow) ? Number(settings.rateLimitLoginWindow) : 10 * 60 * 1000 // 10 Minutes
     this.allowIframe = !!settings.allowIframe
+
+    this.adDetectionEnabled = !!settings.adDetectionEnabled
+    this.adDetectionAutoRun = settings.adDetectionAutoRun !== false
+    this.adDetectionAutoSkip = settings.adDetectionAutoSkip !== false
+    this.adDetectionMinConfidence = !isNaN(settings.adDetectionMinConfidence) && settings.adDetectionMinConfidence !== null ? Number(settings.adDetectionMinConfidence) : 0.7
+    this.adDetectionTranscriptionProvider = settings.adDetectionTranscriptionProvider || 'whisper-local'
+    this.adDetectionWhisperModel = settings.adDetectionWhisperModel || 'base.en'
+    this.adDetectionTranscriptionBaseUrl = settings.adDetectionTranscriptionBaseUrl || null
+    this.adDetectionTranscriptionModel = settings.adDetectionTranscriptionModel || null
+    this.adDetectionTranscriptionApiKey = settings.adDetectionTranscriptionApiKey || null
+    this.adDetectionLlmProvider = settings.adDetectionLlmProvider || 'llm'
+    this.adDetectionLlmBaseUrl = settings.adDetectionLlmBaseUrl || 'https://api.deepseek.com/v1'
+    this.adDetectionLlmModel = settings.adDetectionLlmModel || 'deepseek-chat'
+    this.adDetectionLlmApiKey = settings.adDetectionLlmApiKey || null
 
     this.backupPath = settings.backupPath || Path.join(global.MetadataPath, 'backups')
     this.backupSchedule = settings.backupSchedule || false
@@ -221,6 +251,13 @@ class ServerSettings {
       this.backupPath = process.env.BACKUP_PATH
     }
 
+    if (process.env.AD_DETECTION_LLM_API_KEY) {
+      this.adDetectionLlmApiKey = process.env.AD_DETECTION_LLM_API_KEY
+    }
+    if (process.env.AD_DETECTION_TRANSCRIPTION_API_KEY) {
+      this.adDetectionTranscriptionApiKey = process.env.AD_DETECTION_TRANSCRIPTION_API_KEY
+    }
+
     if (process.env.ALLOW_IFRAME === '1' && !this.allowIframe) {
       Logger.info(`[ServerSettings] Using allowIframe from environment variable`)
       this.allowIframe = true
@@ -280,7 +317,20 @@ class ServerSettings {
       authOpenIDMobileRedirectURIs: this.authOpenIDMobileRedirectURIs, // Do not return to client
       authOpenIDGroupClaim: this.authOpenIDGroupClaim, // Do not return to client
       authOpenIDAdvancedPermsClaim: this.authOpenIDAdvancedPermsClaim, // Do not return to client
-      authOpenIDSubfolderForRedirectURLs: this.authOpenIDSubfolderForRedirectURLs
+      authOpenIDSubfolderForRedirectURLs: this.authOpenIDSubfolderForRedirectURLs,
+      adDetectionEnabled: this.adDetectionEnabled,
+      adDetectionAutoRun: this.adDetectionAutoRun,
+      adDetectionAutoSkip: this.adDetectionAutoSkip,
+      adDetectionMinConfidence: this.adDetectionMinConfidence,
+      adDetectionTranscriptionProvider: this.adDetectionTranscriptionProvider,
+      adDetectionWhisperModel: this.adDetectionWhisperModel,
+      adDetectionTranscriptionBaseUrl: this.adDetectionTranscriptionBaseUrl,
+      adDetectionTranscriptionModel: this.adDetectionTranscriptionModel,
+      adDetectionTranscriptionApiKey: this.adDetectionTranscriptionApiKey, // Do not return to client
+      adDetectionLlmProvider: this.adDetectionLlmProvider,
+      adDetectionLlmBaseUrl: this.adDetectionLlmBaseUrl,
+      adDetectionLlmModel: this.adDetectionLlmModel,
+      adDetectionLlmApiKey: this.adDetectionLlmApiKey // Do not return to client
     }
   }
 
@@ -304,6 +354,11 @@ class ServerSettings {
     delete json.authOpenIDMobileRedirectURIs
     delete json.authOpenIDGroupClaim
     delete json.authOpenIDAdvancedPermsClaim
+    // Never ship provider credentials to the browser - only whether one is set
+    json.adDetectionLlmApiKeySet = !!json.adDetectionLlmApiKey
+    json.adDetectionTranscriptionApiKeySet = !!json.adDetectionTranscriptionApiKey
+    delete json.adDetectionLlmApiKey
+    delete json.adDetectionTranscriptionApiKey
     json.timeZone = ServerSettings.getHostTimeZone()
     return json
   }

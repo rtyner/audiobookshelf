@@ -82,7 +82,37 @@ class PlaybackSessionManager {
     Logger.debug(`[PlaybackSessionManager] startSessionRequest for device ${deviceInfo.deviceDescription}`)
     const { libraryItem, body: options } = req
     const session = await this.startSession(req.user, deviceInfo, libraryItem, episodeId, options)
-    res.json(session.toJSONForClient(libraryItem))
+
+    const sessionJson = session.toJSONForClient(libraryItem)
+    // Ship ad segments with the session so players (web, cast and the mobile
+    // apps) get them in the same round trip that starts playback.
+    sessionJson.adSegments = await this.getAdSegmentsForSession(session, req.user)
+    res.json(sessionJson)
+  }
+
+  /**
+   * Enabled ad segments for the media item being played, or an empty array when
+   * ad detection is off or the user opted out of skipping.
+   *
+   * @param {import('../objects/PlaybackSession')} session
+   * @param {import('../models/User')} user
+   * @returns {Promise<Object[]>}
+   */
+  async getAdSegmentsForSession(session, user) {
+    if (!Database.serverSettings?.adDetectionEnabled) return []
+    if (!session.episodeId) return []
+    if (user?.settings?.autoSkipAds === false && !Database.serverSettings.adDetectionAutoSkip) return []
+    try {
+      const segments = await Database.mediaItemAdSegmentModel.findAll({
+        where: { mediaItemId: session.episodeId, mediaItemType: 'podcastEpisode', enabled: true },
+        order: [['startTime', 'ASC']]
+      })
+      return segments.map((segment) => segment.toJSONForClient())
+    } catch (error) {
+      // Never let this break playback
+      Logger.error(`[PlaybackSessionManager] Failed to load ad segments for episode ${session.episodeId}`, error)
+      return []
+    }
   }
 
   /**

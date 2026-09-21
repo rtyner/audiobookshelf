@@ -15,6 +15,7 @@ const prober = require('../utils/prober')
 const ffmpegHelpers = require('../utils/ffmpegHelpers')
 
 const TaskManager = require('./TaskManager')
+const AdDetectionManager = require('./AdDetectionManager')
 const CoverManager = require('../managers/CoverManager')
 const NotificationManager = require('../managers/NotificationManager')
 
@@ -234,6 +235,7 @@ class PodcastManager {
               mediaItemId: episodeToRemove.id
             }
           })
+          await AdDetectionManager.cleanupEpisode(episodeToRemove.id)
           await episodeToRemove.destroy()
           libraryItem.media.podcastEpisodes = libraryItem.media.podcastEpisodes.filter((ep) => ep.id !== episodeToRemove.id)
 
@@ -258,6 +260,14 @@ class PodcastManager {
     if (this.currentDownload.isAutoDownload) {
       // Notifications only for auto downloaded episodes
       NotificationManager.onPodcastEpisodeDownloaded(libraryItem, podcastEpisode)
+    }
+
+    // Queue AI ad detection. Fire and forget - a detection failure must never
+    // fail the download that produced the episode.
+    if (Database.serverSettings.adDetectionEnabled && Database.serverSettings.adDetectionAutoRun && AdDetectionManager.isEnabledForPodcast(libraryItem.media)) {
+      AdDetectionManager.queueEpisode(podcastEpisode.id, libraryItem.id).catch((error) => {
+        Logger.error(`[PodcastManager] Failed to queue ad detection for episode ${podcastEpisode.id}`, error)
+      })
     }
 
     return true
