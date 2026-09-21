@@ -49,7 +49,8 @@ class OpenAICompatibleTranscriptionProvider extends TranscriptionProvider {
 
     // Node's global FormData + openAsBlob avoids pulling in a form-data
     // dependency while still streaming the file rather than buffering it.
-    const blob = await nodeFs.promises.openAsBlob(wavPath, { type: 'audio/wav' })
+    // openAsBlob lives on the fs module itself, not on fs.promises
+    const blob = await nodeFs.openAsBlob(wavPath, { type: 'audio/wav' })
     const form = new globalThis.FormData()
     form.append('file', blob, Path.basename(wavPath))
     form.append('model', this.model)
