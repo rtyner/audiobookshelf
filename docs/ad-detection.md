@@ -206,10 +206,20 @@ cp .env.example .env    # add DEEPSEEK_API_KEY
 docker compose up -d --build
 ```
 
-Then in Settings -> Ad Detection, set the transcription provider to
-`OpenAI-compatible API` with base URL `http://whisper:8000/v1`.
+The stack pre-configures itself through the environment: ad detection is
+enabled, transcription points at the whisper sidecar, and detection points at
+DeepSeek. The only thing you supply is the API key - either in `.env` before
+starting, or in Settings -> Ad Detection afterwards.
 
-`deploy-dev01.sh` does the same on a remote host over SSH.
+Environment values override stored settings, so the container stays the source
+of truth. The overrides are `AD_DETECTION_ENABLED`,
+`AD_DETECTION_TRANSCRIPTION_PROVIDER`, `AD_DETECTION_TRANSCRIPTION_BASE_URL`,
+`AD_DETECTION_TRANSCRIPTION_MODEL`, `AD_DETECTION_LLM_BASE_URL`,
+`AD_DETECTION_LLM_MODEL`, `AD_DETECTION_LLM_API_KEY` and
+`AD_DETECTION_TRANSCRIPTION_API_KEY`.
+
+`deploy-dev01.sh` does the same on a remote host over SSH (defaults to
+`rusty@10.1.1.50`, invoking docker through sudo).
 
 ---
 

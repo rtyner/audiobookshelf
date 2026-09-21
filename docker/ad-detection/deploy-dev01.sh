@@ -65,6 +65,16 @@ ssh $SSH_OPTS "$HOST" "cd '$REMOTE_DIR/docker/ad-detection' && sudo docker compo
 
 echo
 echo "Audiobookshelf:  http://10.1.1.50:${ABS_PORT:-13378}"
-echo "Next: create the admin account, add a podcast library, then"
-echo "      Settings -> Ad Detection -> enable, transcription provider"
-echo "      'OpenAI-compatible API', base URL http://whisper:8000/v1"
+echo
+echo "Next:"
+echo "  1. Open it and create the admin account."
+if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
+  echo "  2. Settings -> Ad Detection -> paste your DeepSeek API key -> Save."
+else
+  echo "  2. Nothing - the API key was supplied, ad detection is already on."
+fi
+echo "  3. Add a podcast library and download an episode."
+echo
+echo "Transcription is already pointed at the whisper sidecar; detection is"
+echo "already pointed at DeepSeek. Budget ~20 min of processing per hour of"
+echo "audio. Skipping is client-side, so test on the device you actually use."
