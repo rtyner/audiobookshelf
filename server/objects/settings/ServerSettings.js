@@ -5,6 +5,9 @@ const Logger = require('../../Logger')
 const User = require('../../models/User')
 const { sanitize } = require('../../utils/htmlSanitizer')
 
+/** No detector reports total certainty, so a higher threshold accepts nothing */
+const MAX_AD_DETECTION_CONFIDENCE = 0.95
+
 const PATCHABLE_SETTINGS_KEYS = new Set([
   'scannerParseSubtitle',
   'scannerFindCovers',
@@ -162,6 +165,14 @@ class ServerSettings {
     this.adDetectionAutoRun = settings.adDetectionAutoRun !== false
     this.adDetectionAutoSkip = settings.adDetectionAutoSkip !== false
     this.adDetectionMinConfidence = !isNaN(settings.adDetectionMinConfidence) && settings.adDetectionMinConfidence !== null ? Number(settings.adDetectionMinConfidence) : 0.7
+    // Detectors deliberately never report total certainty - a keyword match is
+    // evidence, not proof - so a threshold of 1 silently rejects every segment.
+    if (this.adDetectionMinConfidence > MAX_AD_DETECTION_CONFIDENCE) {
+      Logger.warn(`[ServerSettings] adDetectionMinConfidence ${this.adDetectionMinConfidence} would reject every segment, clamping to ${MAX_AD_DETECTION_CONFIDENCE}`)
+      this.adDetectionMinConfidence = MAX_AD_DETECTION_CONFIDENCE
+    } else if (this.adDetectionMinConfidence < 0) {
+      this.adDetectionMinConfidence = 0
+    }
     this.adDetectionTranscriptionProvider = settings.adDetectionTranscriptionProvider || 'whisper-local'
     this.adDetectionWhisperModel = settings.adDetectionWhisperModel || 'base.en'
     this.adDetectionTranscriptionBaseUrl = settings.adDetectionTranscriptionBaseUrl || null

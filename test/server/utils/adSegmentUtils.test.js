@@ -196,3 +196,17 @@ describe('adSegmentUtils', () => {
     })
   })
 })
+
+describe('adSegmentUtils confidence threshold', () => {
+  it('rejects everything at a threshold no detector can reach', () => {
+    // Guards the footgun: detectors cap confidence below 1 on purpose, so a
+    // threshold of 1 accepts nothing. ServerSettings clamps it for this reason.
+    const segments = adSegmentUtils.postProcess([{ start: 100, end: 160, confidence: 0.95 }], { duration: 3600, minConfidence: 1 })
+    expect(segments).to.be.empty
+  })
+
+  it('accepts a high-confidence segment at the clamped maximum', () => {
+    const segments = adSegmentUtils.postProcess([{ start: 100, end: 160, confidence: 0.95 }], { duration: 3600, minConfidence: 0.95 })
+    expect(segments).to.have.lengthOf(1)
+  })
+})

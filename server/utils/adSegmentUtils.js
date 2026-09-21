@@ -196,7 +196,17 @@ function postProcess(rawSegments, { duration, minConfidence = 0, silences = [] }
   segments = snapToSilence(segments, silences)
   segments = clamp(segments, duration)
   segments = merge(segments)
+  const beforeFilter = segments
   segments = filterImplausible(segments, duration, minConfidence)
+  if (beforeFilter.length && !segments.length) {
+    // Silence here is the hardest failure to diagnose - the run "succeeds"
+    // with nothing to show for it - so say exactly what was rejected.
+    const reasons = beforeFilter.map((segment) => {
+      const length = (segment.end - segment.start).toFixed(1)
+      return `${segment.start.toFixed(1)}-${segment.end.toFixed(1)} (${length}s, confidence ${segment.confidence})`
+    })
+    Logger.info(`[adSegmentUtils] all ${beforeFilter.length} candidate(s) rejected at minConfidence ${minConfidence}, max segment ${(duration * MAX_SEGMENT_DURATION_RATIO).toFixed(0)}s: ${reasons.join(', ')}`)
+  }
   segments = labelByPosition(segments, duration)
   Logger.debug(`[adSegmentUtils] post-processed ${rawSegments?.length || 0} raw segments into ${segments.length}`)
   return segments

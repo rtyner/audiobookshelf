@@ -27,7 +27,7 @@
 
           <div class="flex items-center -mx-1 my-4">
             <div class="w-full md:w-1/3 px-1">
-              <ui-text-input-with-label v-model="newSettings.adDetectionMinConfidence" type="number" step="0.05" min="0" max="1" :disabled="saving" :label="$strings.LabelAdDetectionMinConfidence" />
+              <ui-text-input-with-label v-model="newSettings.adDetectionMinConfidence" type="number" step="0.05" min="0" max="0.95" :disabled="saving" :label="$strings.LabelAdDetectionMinConfidence" />
             </div>
           </div>
 
