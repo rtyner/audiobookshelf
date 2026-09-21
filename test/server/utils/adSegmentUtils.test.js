@@ -125,7 +125,14 @@ describe('adSegmentUtils', () => {
         { start: 264, end: 268 }
       ])
       expect(result[0].start).to.equal(120)
-      expect(result[0].end).to.equal(268)
+      // 268 is 9s away, beyond the window, so the reachable near edge wins
+      expect(result[0].end).to.equal(264)
+    })
+
+    it('never moves a boundary further than the window', () => {
+      const result = adSegmentUtils.snapToSilence([{ start: 100, end: 200, confidence: 1 }], [{ start: 20, end: 99 }])
+      // The silence ends 1s before the start, but its far edge is 80s away
+      expect(result[0].start).to.equal(99)
     })
 
     it('swallows the whole silence rather than landing inside it', () => {

@@ -23,6 +23,10 @@ const TranscriptionProvider = require('./TranscriptionProvider')
 const MODEL_BASE_URL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main'
 const KNOWN_MODELS = ['tiny.en', 'tiny', 'base.en', 'base', 'small.en', 'small', 'medium.en', 'medium', 'large-v3-turbo']
 const CANDIDATE_BINARY_NAMES = ['whisper-cli', 'whisper-cpp', 'main']
+/** How long to wait for the model download to start responding */
+const RESPONSE_TIMEOUT_MS = 60000
+/** Abort the download if no bytes arrive for this long */
+const STALL_TIMEOUT_MS = 120000
 
 class WhisperCppProvider extends TranscriptionProvider {
   static get identifier() {
@@ -97,28 +101,67 @@ class WhisperCppProvider extends TranscriptionProvider {
     const tempPath = `${modelPath}.download`
     Logger.info(`[WhisperCppProvider] Downloading model ${this.model} from ${url}`)
 
-    const response = await axios({ url, method: 'GET', responseType: 'stream', timeout: 0 })
+    // A large download must never pin the job forever. Two guards: a timeout
+    // on getting the response at all, and a watchdog that aborts if the bytes
+    // stop arriving mid-transfer.
+    const controller = new AbortController()
+    let response
+    try {
+      response = await axios({
+        url,
+        method: 'GET',
+        responseType: 'stream',
+        timeout: RESPONSE_TIMEOUT_MS,
+        signal: controller.signal,
+        headers: { 'User-Agent': 'audiobookshelf' }
+      })
+    } catch (error) {
+      await fs.remove(tempPath).catch(() => null)
+      throw new Error(`Failed to download whisper model ${this.model} from ${url}: ${error?.message}`)
+    }
+
     const total = Number(response.headers['content-length']) || 0
     let downloaded = 0
     let lastReported = 0
+    let lastProgressAt = Date.now()
 
-    await new Promise((resolve, reject) => {
-      const writer = fs.createWriteStream(tempPath)
-      response.data.on('data', (chunk) => {
-        downloaded += chunk.length
-        if (total && progressCb) {
-          const percent = Math.floor((downloaded / total) * 100)
-          if (percent >= lastReported + 5) {
-            lastReported = percent
-            progressCb(percent)
+    const stallTimer = setInterval(() => {
+      if (Date.now() - lastProgressAt > STALL_TIMEOUT_MS) {
+        controller.abort()
+        response.data.destroy(new Error(`download stalled for ${STALL_TIMEOUT_MS / 1000}s`))
+      }
+    }, 5000)
+
+    try {
+      await new Promise((resolve, reject) => {
+        const writer = fs.createWriteStream(tempPath)
+        response.data.on('data', (chunk) => {
+          downloaded += chunk.length
+          lastProgressAt = Date.now()
+          if (total && progressCb) {
+            const percent = Math.floor((downloaded / total) * 100)
+            if (percent >= lastReported + 5) {
+              lastReported = percent
+              progressCb(percent)
+            }
           }
-        }
+        })
+        response.data.on('error', reject)
+        writer.on('error', reject)
+        writer.on('finish', resolve)
+        response.data.pipe(writer)
       })
-      response.data.on('error', reject)
-      writer.on('error', reject)
-      writer.on('finish', resolve)
-      response.data.pipe(writer)
-    })
+    } catch (error) {
+      await fs.remove(tempPath).catch(() => null)
+      throw new Error(`Failed to download whisper model ${this.model}: ${error?.message}`)
+    } finally {
+      clearInterval(stallTimer)
+    }
+
+    if (total && downloaded !== total) {
+      await fs.remove(tempPath).catch(() => null)
+      throw new Error(`Whisper model download was truncated (${downloaded} of ${total} bytes)`)
+    }
 
     await fs.move(tempPath, modelPath, { overwrite: true })
     Logger.info(`[WhisperCppProvider] Model saved to ${modelPath}`)
@@ -142,7 +185,10 @@ class WhisperCppProvider extends TranscriptionProvider {
     const outputPrefix = wavPath.replace(/\.wav$/i, '')
     const jsonPath = `${outputPrefix}.json`
 
-    const args = ['-m', modelPath, '-f', wavPath, '-oj', '-of', outputPrefix, '-t', String(this.threads), '-np', '-nt']
+    // -np quiets progress output. Do NOT pass -nt: it collapses the output
+    // into one segment per 30s window, which is far too coarse to place an
+    // ad boundary. Without it whisper.cpp emits per-utterance segments.
+    const args = ['-m', modelPath, '-f', wavPath, '-oj', '-of', outputPrefix, '-t', String(this.threads), '-np']
     const language = options.language || this.config.language
     if (language) args.push('-l', language)
 

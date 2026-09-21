@@ -156,19 +156,20 @@ function snapToSilence(segments, silences, window = SILENCE_SNAP_WINDOW_SECONDS)
    * @param {'start'|'end'} edge
    */
   const snap = (time, edge) => {
-    let nearest = null
-    let nearestDistance = window
+    // Every silence edge is a candidate seam, but only ones the boundary can
+    // actually reach within the window - snapping to the far side of a long
+    // gap would move further than the window allows and swallow content.
+    const candidates = []
     for (const silence of silences) {
-      const distance = distanceToSilence(time, silence)
-      if (distance < nearestDistance) {
-        nearest = silence
-        nearestDistance = distance
+      if (distanceToSilence(time, silence) > window) continue
+      for (const candidate of [silence.start, silence.end]) {
+        if (Math.abs(candidate - time) <= window) candidates.push(candidate)
       }
     }
-    if (!nearest) return time
-    // Expand outward onto the far edge of the silence so the whole gap is
-    // swallowed. Nothing audible is lost - the gap is silent by definition.
-    return edge === 'start' ? nearest.start : nearest.end
+    if (!candidates.length) return time
+    // Expand outward onto the furthest reachable seam, so the whole gap is
+    // swallowed. Nothing audible is lost - a gap is silent by definition.
+    return edge === 'start' ? Math.min(...candidates) : Math.max(...candidates)
   }
 
   return segments.map((segment) => ({

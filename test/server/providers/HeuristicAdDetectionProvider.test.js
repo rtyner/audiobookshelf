@@ -45,6 +45,38 @@ describe('HeuristicAdDetectionProvider', () => {
     expect(await provider.detect(null)).to.be.empty
   })
 
+  it('emits only the ad copy, not the whole scoring neighbourhood', async () => {
+    // Regression: scoring a sliding window and emitting the whole window
+    // reported several seconds of real content either side of the read.
+    const result = await provider.detect(
+      transcript([
+        'today my guest has run every peak in the state',
+        'and we are going to hear how that went',
+        'this episode is brought to you by acme socks, use promo code TRAIL',
+        'free trial, cancel anytime, terms and conditions apply',
+        'so you were saying something about the ridge line',
+        'and how the weather turned about halfway up'
+      ])
+    )
+    expect(result).to.have.lengthOf(1)
+    expect(result[0].start).to.equal(10)
+    expect(result[0].end).to.equal(20)
+  })
+
+  it('treats a return-to-show phrase as the seam, not as ad copy', async () => {
+    const result = await provider.detect(
+      transcript([
+        'this episode is brought to you by acme socks, use promo code TRAIL',
+        'free trial, cancel anytime, terms and conditions apply',
+        'okay so back to the episode, you were saying about the ridge line',
+        'and how the weather turned about halfway up'
+      ])
+    )
+    expect(result).to.have.lengthOf(1)
+    // The "back to the episode" line is content resuming, so it stays out
+    expect(result[0].end).to.equal(10)
+  })
+
   it('caps confidence below certainty', async () => {
     const result = await provider.detect(transcript(['this episode is sponsored by acme', 'our sponsor acme, use code ACME, free trial, cancel anytime', 'terms and conditions apply']))
     expect(result).to.not.be.empty
