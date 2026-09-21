@@ -4,6 +4,11 @@ ARG NUSQLITE3_PATH="${NUSQLITE3_DIR}/libnusqlite3.so"
 ### STAGE 0: Build client ###
 FROM node:24-alpine AS build-client
 
+# npm fetches fail intermittently on some networks; retry rather than failing
+# the whole image build on one dropped connection.
+ENV NPM_CONFIG_FETCH_RETRIES=5
+ENV NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000
+
 WORKDIR /client
 COPY /client /client
 RUN npm ci && npm cache clean --force
@@ -12,6 +17,9 @@ RUN npm run generate
 ### STAGE 1: Compile server on the builder CPU (avoid QEMU SIGILL from tsc on arm64) ###
 FROM --platform=$BUILDPLATFORM node:24-alpine AS compile-server
 
+ENV NPM_CONFIG_FETCH_RETRIES=5
+ENV NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000
+
 WORKDIR /server
 COPY index.js package* tsconfig.server.json /server
 COPY /server /server/server
@@ -19,6 +27,9 @@ RUN npm ci --include=dev --ignore-scripts && npm run build:server
 
 ### STAGE 2: Install native server deps for the target arch ###
 FROM node:24-alpine AS build-server
+
+ENV NPM_CONFIG_FETCH_RETRIES=5
+ENV NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000
 
 ARG NUSQLITE3_DIR
 ARG TARGETPLATFORM
