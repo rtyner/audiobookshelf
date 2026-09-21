@@ -7,6 +7,7 @@ export const state = () => ({
   versionData: null,
   serverSettings: null,
   playbackSessionId: null,
+  adSegments: [],
   streamLibraryItem: null,
   streamEpisodeId: null,
   streamIsPlaying: false,
@@ -158,6 +159,9 @@ export const mutations = {
   },
   setPlaybackSessionId(state, playbackSessionId) {
     state.playbackSessionId = playbackSessionId
+  },
+  setAdSegments(state, adSegments) {
+    state.adSegments = Array.isArray(adSegments) ? adSegments : []
   },
   setMediaPlaying(state, payload) {
     if (!payload) {

@@ -25,7 +25,20 @@ const PATCHABLE_SETTINGS_KEYS = new Set([
   'timeFormat',
   'language',
   'chromecastEnabled',
-  'sortingIgnorePrefix'
+  'sortingIgnorePrefix',
+  'adDetectionEnabled',
+  'adDetectionAutoRun',
+  'adDetectionAutoSkip',
+  'adDetectionMinConfidence',
+  'adDetectionTranscriptionProvider',
+  'adDetectionWhisperModel',
+  'adDetectionTranscriptionBaseUrl',
+  'adDetectionTranscriptionModel',
+  'adDetectionTranscriptionApiKey',
+  'adDetectionLlmProvider',
+  'adDetectionLlmBaseUrl',
+  'adDetectionLlmModel',
+  'adDetectionLlmApiKey'
 ])
 
 class ServerSettings {

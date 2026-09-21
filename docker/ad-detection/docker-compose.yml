@@ -1,0 +1,61 @@
+# Audiobookshelf with AI podcast ad detection.
+#
+# Two services:
+#   audiobookshelf  - this fork, built from the repo root
+#   whisper         - faster-whisper behind an OpenAI-compatible
+#                     /v1/audio/transcriptions endpoint
+#
+# Why a sidecar rather than whisper.cpp inside the app image: the published
+# whisper.cpp binaries are built for AVX2/FMA/F16C and die with SIGILL on
+# older Xeons (Sandy Bridge and similar), which is exactly the hardware a
+# home server tends to be. faster-whisper (CTranslate2) runs on plain AVX.
+#
+# On a host WITH AVX2 you can instead install whisper.cpp in the app image and
+# set the transcription provider to "whisper-local".
+
+services:
+  audiobookshelf:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: audiobookshelf-adskip:local
+    container_name: audiobookshelf-adskip
+    restart: unless-stopped
+    ports:
+      - '${ABS_PORT:-13378}:80'
+    environment:
+      TZ: ${TZ:-America/New_York}
+      # Read at startup so the key is never stored in the settings row
+      AD_DETECTION_LLM_API_KEY: ${DEEPSEEK_API_KEY:?set DEEPSEEK_API_KEY in .env}
+    volumes:
+      - ./data/config:/config
+      - ./data/metadata:/metadata
+      - ./data/podcasts:/podcasts
+    depends_on:
+      whisper:
+        condition: service_healthy
+
+  whisper:
+    image: fedirz/faster-whisper-server:latest-cpu
+    container_name: audiobookshelf-whisper
+    restart: unless-stopped
+    environment:
+      # small.en is the accuracy/CPU sweet spot for ad detection - the LLM
+      # only needs the transcript to be good enough to spot a sponsor read.
+      WHISPER__MODEL: Systran/faster-whisper-small.en
+      WHISPER__COMPUTE_TYPE: int8
+      WHISPER__INFERENCE_DEVICE: cpu
+      # CTranslate2 otherwise picks its own thread count and can land on one
+      OMP_NUM_THREADS: ${WHISPER_THREADS:-3}
+    volumes:
+      - ./data/whisper-cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        limits:
+          cpus: '${WHISPER_THREADS:-3}'
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 300s

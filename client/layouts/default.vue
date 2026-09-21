@@ -290,6 +290,13 @@ export default {
       }
       if (this.$refs.mediaPlayerContainer) this.$refs.mediaPlayerContainer.sessionClosedEvent(sessionId)
     },
+    adSegmentsUpdated(payload) {
+      this.$eventBus.$emit('ad-segments-updated', payload)
+      // Only the item currently playing needs its in-memory segments refreshed
+      if (!payload?.episodeId) return
+      if (this.$store.state.streamEpisodeId !== payload.episodeId) return
+      this.$store.commit('setAdSegments', (payload.segments || []).filter((segment) => segment.enabled !== false))
+    },
     userMediaProgressUpdate(payload) {
       this.$store.commit('user/updateMediaProgress', payload)
 
@@ -464,6 +471,9 @@ export default {
       this.socket.on('track_finished', this.trackFinished)
       this.socket.on('track_progress', this.trackProgress)
       this.socket.on('task_progress', this.taskProgress)
+
+      // Ad Detection Listeners
+      this.socket.on('ad_segments_updated', this.adSegmentsUpdated)
 
       // EReader Device Listeners
       this.socket.on('ereader-devices-updated', this.ereaderDevicesUpdated)

@@ -23,6 +23,12 @@ export default class PlayerHandler {
     this.listeningTimeSinceSync = 0
 
     this.playInterval = null
+
+    // Segments the listener deliberately returned to. Skipping them again
+    // would trap them in a loop they cannot get out of.
+    this.unskippedSegmentIds = new Set()
+    this.lastSkippedSegmentId = null
+    this.lastSeekTime = 0
   }
 
   get isCasting() {
@@ -49,6 +55,19 @@ export default class PlayerHandler {
   }
   get jumpBackwardAmount() {
     return this.ctx.$store.getters['user/getUserSetting']('jumpBackwardAmount')
+  }
+  /**
+   * The store is the single source of truth so that segments edited while
+   * playing (socket "ad_segments_updated") take effect immediately.
+   * @type {{id: string, startTime: number, endTime: number, label: string}[]}
+   */
+  get adSegments() {
+    return this.ctx.$store.state.adSegments || []
+  }
+  get autoSkipAdsEnabled() {
+    // Read settings directly - the getUserSetting getter coerces false to null
+    if (this.ctx.$store.state.user.settings?.autoSkipAds === false) return false
+    return this.ctx.$store.getters['getServerSetting']('adDetectionAutoSkip') !== false
   }
 
   setSessionId(sessionId) {
@@ -164,6 +183,85 @@ export default class PlayerHandler {
 
   playerTimeupdate(time) {
     this.ctx.setCurrentTime(time)
+    this.checkSkipAdSegment(time)
+  }
+
+  /**
+   * Replace the ad segments for the item being played.
+   *
+   * @param {Object[]} segments
+   */
+  setAdSegments(segments) {
+    this.unskippedSegmentIds = new Set()
+    this.lastSkippedSegmentId = null
+    this.ctx.$store.commit('setAdSegments', Array.isArray(segments) ? segments.filter((segment) => segment.enabled !== false) : [])
+  }
+
+  /**
+   * The segment containing this time, if any.
+   *
+   * @param {number} time
+   * @returns {Object|null}
+   */
+  getAdSegmentAtTime(time) {
+    // A small lead-in catches the seam before the first word of the ad
+    return this.adSegments.find((segment) => time >= segment.startTime - 0.25 && time < segment.endTime - 0.25) || null
+  }
+
+  /**
+   * Seek past an ad segment when playback enters one.
+   *
+   * Deliberately conservative: a segment is skipped at most once per session,
+   * never when the listener just seeked backwards into it, and never when the
+   * remaining audio after it is too short to be worth a jump.
+   *
+   * @param {number} time
+   */
+  checkSkipAdSegment(time) {
+    if (!this.adSegments.length || !this.autoSkipAdsEnabled) return
+    if (!this.playerPlaying) return
+
+    const segment = this.getAdSegmentAtTime(time)
+    if (!segment) {
+      if (this.lastSkippedSegmentId && !this.getAdSegmentAtTime(time)) {
+        this.lastSkippedSegmentId = null
+      }
+      return
+    }
+
+    if (this.unskippedSegmentIds.has(segment.id)) return
+    if (this.lastSkippedSegmentId === segment.id) return
+
+    // Seeking backwards into an ad is an explicit "I want to hear this"
+    if (Date.now() - this.lastSeekTime < 5000) {
+      this.unskippedSegmentIds.add(segment.id)
+      return
+    }
+
+    const duration = this.getDuration()
+    const target = segment.endTime + 0.1
+    if (duration && target >= duration - 0.5) {
+      // Nothing meaningful left after the ad - let it play out rather than
+      // ending the episode early.
+      return
+    }
+
+    this.lastSkippedSegmentId = segment.id
+    console.log(`[PlayerHandler] Skipping ad segment ${segment.id} (${segment.startTime} -> ${segment.endTime})`)
+    this.seek(target, true, true)
+    this.ctx.onAdSegmentSkipped?.(segment)
+  }
+
+  /**
+   * Return to the start of a segment and stop skipping it this session.
+   *
+   * @param {Object} segment
+   */
+  undoAdSkip(segment) {
+    if (!segment) return
+    this.unskippedSegmentIds.add(segment.id)
+    this.lastSkippedSegmentId = null
+    this.seek(Math.max(0, segment.startTime))
   }
 
   playerBufferTimeUpdate(buffertime) {
@@ -222,6 +320,8 @@ export default class PlayerHandler {
     this.displayAuthor = session.displayAuthor
 
     console.log('[PlayerHandler] Preparing Session', session)
+
+    this.setAdSegments(session.adSegments || [])
 
     var audioTracks = session.audioTracks.map((at) => new AudioTrack(at, session.id, this.ctx.$config.routerBasePath))
 
@@ -383,8 +483,13 @@ export default class PlayerHandler {
     this.player.setPlaybackRate(playbackRate)
   }
 
-  seek(time, shouldSync = true) {
+  seek(time, shouldSync = true, isAdSkip = false) {
     if (!this.player) return
+    // Only a listener seeking backwards suppresses ad skipping - the skip
+    // itself must not suppress the next one.
+    if (!isAdSkip && time < this.getCurrentTime()) {
+      this.lastSeekTime = Date.now()
+    }
     this.player.seek(time, this.playerPlaying)
     this.ctx.setCurrentTime(time)
 

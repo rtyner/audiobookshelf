@@ -152,7 +152,7 @@ class WhisperCppProvider extends TranscriptionProvider {
     if (!(await fs.pathExists(jsonPath))) {
       throw new Error('whisper.cpp produced no JSON output')
     }
-    const raw = await fs.readJson(jsonPath)
+    const raw = JSON.parse(await fs.readFile(jsonPath, 'utf8'))
     await fs.remove(jsonPath).catch(() => null)
 
     return {

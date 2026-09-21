@@ -41,6 +41,11 @@
           </p>
         </div>
       </div>
+
+      <template v-if="adDetectionEnabled">
+        <div class="w-full h-px bg-white/5 my-4" />
+        <widgets-ad-segments-panel :library-item-id="libraryItem.id" :episode-id="episodeId" />
+      </template>
     </div>
   </modals-modal>
 </template>
@@ -102,6 +107,9 @@ export default {
     },
     bookCoverAspectRatio() {
       return this.$store.getters['libraries/getBookCoverAspectRatio']
+    },
+    adDetectionEnabled() {
+      return this.$store.getters['getServerSetting']('adDetectionEnabled') === true && !!this.libraryItem?.id
     }
   },
   methods: {

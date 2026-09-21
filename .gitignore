@@ -25,3 +25,7 @@ sw.*
 .idea/*
 tailwind.compiled.css
 tailwind.config.js
+
+# Ad detection stack runtime data
+docker/ad-detection/data/
+docker/ad-detection/.env

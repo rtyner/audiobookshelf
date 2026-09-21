@@ -6,6 +6,10 @@
       <div ref="bufferTrack" class="h-full bg-gray-500 absolute top-0 left-0 pointer-events-none" />
       <div ref="playedTrack" class="h-full bg-gray-200 absolute top-0 left-0 pointer-events-none" />
       <div ref="trackCursor" class="h-full w-0.5 bg-gray-50 absolute top-0 left-0 opacity-0 pointer-events-none" />
+      <!-- Detected ad segments -->
+      <template v-for="(band, index) in adSegmentBands">
+        <div :key="`ad-${index}`" :style="{ left: band.left + 'px', width: band.width + 'px' }" class="h-full absolute top-0 bg-warning/40 pointer-events-none" />
+      </template>
       <div v-if="loading" class="h-full w-1/4 absolute left-0 top-0 loadingTrack pointer-events-none bg-white/25" />
     </div>
     <div class="w-full h-2 relative overflow-hidden" :class="useChapterTrack ? 'opacity-0' : ''">
@@ -48,6 +52,7 @@ export default {
       percentReady: 0,
       bufferTime: 0,
       chapterTicks: [],
+      adSegmentBands: [],
       trackOffsetLeft: 16, // Track is 16px from edge
       playedTrackWidth: 0,
       readyTrackWidth: 0,
@@ -59,6 +64,12 @@ export default {
     duration: {
       handler() {
         this.setChapterTicks()
+        this.setAdSegmentBands()
+      }
+    },
+    adSegments: {
+      handler() {
+        this.setAdSegmentBands()
       }
     }
   },
@@ -77,6 +88,9 @@ export default {
     },
     isMobile() {
       return this.$store.state.globals.isMobile
+    },
+    adSegments() {
+      return this.$store.state.adSegments || []
     }
   },
   methods: {
@@ -84,6 +98,7 @@ export default {
       this.useChapterTrack = useChapterTrack
       this.updateBufferTrack()
       this.updatePlayedTrackWidth()
+      this.setAdSegmentBands()
     },
     clickTrack(e) {
       if (this.loading) return
@@ -137,6 +152,20 @@ export default {
       }
       if (this.$refs.playedTrack) this.$refs.playedTrack.style.width = ptWidth + 'px'
       this.playedTrackWidth = ptWidth
+    },
+    setAdSegmentBands() {
+      // Ad bands are only meaningful against the whole item, not a single chapter
+      if (this.useChapterTrack || !this.duration || !this.trackWidth) {
+        this.adSegmentBands = []
+        return
+      }
+      this.adSegmentBands = this.adSegments
+        .filter((segment) => segment.enabled !== false)
+        .map((segment) => {
+          const left = (segment.startTime / this.duration) * this.trackWidth
+          const width = Math.max(2, ((segment.endTime - segment.startTime) / this.duration) * this.trackWidth)
+          return { left, width, label: segment.label }
+        })
     },
     setChapterTicks() {
       this.chapterTicks = this.chapters.map((chap) => {
@@ -212,6 +241,7 @@ export default {
     windowResize() {
       this.setTrackWidth()
       this.setChapterTicks()
+      this.setAdSegmentBands()
       this.updatePlayedTrackWidth()
       this.updateBufferTrack()
     }
@@ -219,6 +249,7 @@ export default {
   mounted() {
     this.setTrackWidth()
     this.setChapterTicks()
+    this.setAdSegmentBands()
     window.addEventListener('resize', this.windowResize)
   },
   beforeDestroy() {

@@ -114,6 +114,11 @@ export default {
           id: 'config-authentication',
           title: this.$strings.HeaderAuthentication,
           path: '/config/authentication'
+        },
+        {
+          id: 'config-ad-detection',
+          title: this.$strings.HeaderAdDetection,
+          path: '/config/ad-detection'
         }
       ]
 

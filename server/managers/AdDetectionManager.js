@@ -6,7 +6,9 @@ const SocketAuthority = require('../SocketAuthority')
 const TaskManager = require('./TaskManager')
 const audioPrep = require('../utils/audioPrep')
 const adSegmentUtils = require('../utils/adSegmentUtils')
-const { createTranscriptionProvider, createAdDetectionProvider } = require('../providers')
+// Required as a module rather than destructured so the factories stay
+// swappable (tests, and any future runtime provider override).
+const providers = require('../providers')
 
 /**
  * Orchestrates transcription + ad detection for podcast episodes.
@@ -165,8 +167,8 @@ class AdDetectionManager {
 
     let cleanup = null
     try {
-      const transcriptionProvider = createTranscriptionProvider(serverSettings)
-      const detectionProvider = createAdDetectionProvider(serverSettings)
+      const transcriptionProvider = providers.createTranscriptionProvider(serverSettings)
+      const detectionProvider = providers.createAdDetectionProvider(serverSettings)
       await transcriptionProvider.validate()
       await detectionProvider.validate()
 
@@ -269,7 +271,7 @@ class AdDetectionManager {
     const path = this.getTranscriptPath(episodeId)
     if (!(await fs.pathExists(path))) return null
     try {
-      const transcript = await fs.readJson(path)
+      const transcript = JSON.parse(await fs.readFile(path, 'utf8'))
       return transcript?.segments?.length ? transcript : null
     } catch (error) {
       Logger.warn(`[AdDetectionManager] Failed to read transcript ${path}: ${error?.message}`)
@@ -283,7 +285,7 @@ class AdDetectionManager {
    */
   async writeTranscript(episodeId, transcript) {
     await fs.ensureDir(this.transcriptsDir)
-    await fs.writeJson(this.getTranscriptPath(episodeId), transcript)
+    await fs.writeFile(this.getTranscriptPath(episodeId), JSON.stringify(transcript))
   }
 
   /**

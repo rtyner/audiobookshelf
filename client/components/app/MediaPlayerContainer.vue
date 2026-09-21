@@ -60,6 +60,15 @@
     <modals-sleep-timer-modal v-model="showSleepTimerModal" :timer-set="sleepTimerSet" :timer-type="sleepTimerType" :remaining="sleepTimerRemaining" :has-chapters="!!chapters.length" @set="setSleepTimer" @cancel="cancelSleepTimer" @increment="incrementSleepTimer" @decrement="decrementSleepTimer" />
 
     <modals-player-queue-items-modal v-model="showPlayerQueueItemsModal" />
+
+    <!-- Ad skipped notice -->
+    <div v-if="skippedAdSegment" class="absolute -top-12 left-0 right-0 flex justify-center pointer-events-none z-20">
+      <div class="bg-bg border border-warning/60 rounded-full shadow-lg flex items-center gap-2 pl-4 pr-2 py-1.5 pointer-events-auto">
+        <span class="material-symbols text-warning text-lg">fast_forward</span>
+        <p class="text-sm">{{ skippedAdText }}</p>
+        <button class="text-sm text-warning hover:underline px-2 py-0.5" @click="undoAdSkip">{{ $strings.ButtonUndo }}</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -78,6 +87,8 @@ export default {
       currentTime: 0,
       showSleepTimerModal: false,
       showPlayerQueueItemsModal: false,
+      skippedAdSegment: null,
+      skippedAdTimeout: null,
       sleepTimerSet: false,
       sleepTimerRemaining: 0,
       sleepTimerType: null,
@@ -90,6 +101,11 @@ export default {
     }
   },
   computed: {
+    skippedAdText() {
+      if (!this.skippedAdSegment) return ''
+      const seconds = Math.round(this.skippedAdSegment.endTime - this.skippedAdSegment.startTime)
+      return this.$getString('MessageSkippedAd', [this.$secondsToTimestamp(seconds)])
+    },
     isSquareCover() {
       return this.coverAspectRatio === 1
     },
@@ -181,6 +197,23 @@ export default {
     }
   },
   methods: {
+    /**
+     * Called by PlayerHandler after it seeks past an ad segment.
+     * @param {Object} segment
+     */
+    onAdSegmentSkipped(segment) {
+      this.skippedAdSegment = segment
+      clearTimeout(this.skippedAdTimeout)
+      this.skippedAdTimeout = setTimeout(() => {
+        this.skippedAdSegment = null
+      }, 8000)
+    },
+    undoAdSkip() {
+      if (!this.skippedAdSegment) return
+      this.playerHandler.undoAdSkip(this.skippedAdSegment)
+      clearTimeout(this.skippedAdTimeout)
+      this.skippedAdSegment = null
+    },
     mediaFinished(libraryItemId, episodeId) {
       // Play next item in queue
       if (!this.playerQueueItems.length || !this.$store.state.playerQueueAutoPlay) {
@@ -554,6 +587,7 @@ export default {
     this.$eventBus.$on('pause-item', this.pauseItem)
   },
   beforeDestroy() {
+    clearTimeout(this.skippedAdTimeout)
     this.$eventBus.$off('cast-session-active', this.castSessionActive)
     this.$eventBus.$off('playback-seek', this.seek)
     this.$eventBus.$off('playback-time-update', this.playbackTimeUpdate)
