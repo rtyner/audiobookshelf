@@ -20,7 +20,8 @@
     "deploy-linux": "node deploy/linux",
     "test": "npm run build:server && mocha dist-server/test",
     "coverage": "npm run build:server && nyc mocha dist-server/test",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:client": "node test/client/ad-skip-verify.mjs"
   },
   "bin": "dist-server/index.js",
   "pkg": {
