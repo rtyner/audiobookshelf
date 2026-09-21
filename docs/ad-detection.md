@@ -60,6 +60,10 @@ faster-whisper `small.en` runs at roughly **3x realtime** - a one hour episode
 takes about 20 minutes of wall clock. Jobs run one at a time on purpose, so
 transcription never starves playback transcoding.
 
+The model file is downloaded on first use. If it cannot be reached the job
+fails within a minute with the reason, rather than hanging - a stalled
+download is aborted and the partial file removed.
+
 ### Ad detection
 
 | Provider | Notes |
@@ -209,6 +213,32 @@ Then in Settings -> Ad Detection, set the transcription provider to
 
 ---
 
+## Verifying it works
+
+The pipeline was validated end to end against real speech: a host-read sponsor
+block sitting at 32.3s-44.5s in a 76s episode, with two-second gaps either
+side, was transcribed by whisper.cpp, detected, and stored as **30.2s-46.5s** -
+landing on the silence seams either side of the read.
+
+Two things that verification caught are worth knowing about, because they look
+like configuration problems if you hit them:
+
+- **whisper.cpp must not be run with `-nt`.** That flag collapses the
+  transcript into one segment per 30-second window, so every ad boundary can be
+  up to 30 seconds out. Audiobookshelf does not pass it.
+- **Boundaries come from silence, not from the transcript.** A transcript line
+  routinely ends a few seconds before the real seam, so every boundary is
+  snapped onto nearby silence, and never moved further than 6 seconds.
+
+To re-run the checks yourself:
+
+```bash
+npm test              # server suite, including the detection pipeline
+npm run test:client   # the player's ad-skip decisions
+```
+
+---
+
 ## Troubleshooting
 
 **`whisper.cpp not found`** - install it and set `WHISPER_PATH`, or switch to
@@ -221,7 +251,9 @@ instruction. One retry already happened. Try a stronger model; very small local
 models often cannot hold the format.
 
 **Detection finished with zero segments** - check `adDetectionMinConfidence`,
-and read the transcript endpoint to confirm the audio actually transcribed.
+and read the transcript endpoint to confirm the audio actually transcribed. A
+segment longer than a quarter of the episode is also discarded as implausible,
+which is usually a sign the detector over-reached rather than a real ad.
 
 **Ads are detected but not skipped** - check `adDetectionAutoSkip` and the
 per-user `autoSkipAds` setting, and confirm the player is the web player.
